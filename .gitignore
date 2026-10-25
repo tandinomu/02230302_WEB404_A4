@@ -1,0 +1,7 @@
+# Private viva study notes — never commit or submit this.
+viva_notes.md
+
+# OS / editor junk
+.DS_Store
+*.swp
+Thumbs.db

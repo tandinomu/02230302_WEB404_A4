@@ -1,0 +1,27 @@
+# docker-compose.yml
+# Defines the single container that runs our lab.
+# One command starts everything:  docker compose up -d
+
+services:
+  web:
+    # Official PHP 8.3 image with the Apache web server built in.
+    # Apache serves our .php files and PHP executes them.
+    image: php:8.3-apache
+
+    container_name: web404_a4
+
+    ports:
+      # "127.0.0.1:8080:80" means:
+      #   - inside the container Apache listens on port 80
+      #   - we expose it ONLY on the host's loopback address 127.0.0.1, port 8080
+      # Binding to 127.0.0.1 (not 0.0.0.0) is the ethical safeguard:
+      # the lab is reachable from THIS machine only, never from the network.
+      - "127.0.0.1:8088:80"
+
+    volumes:
+      # Mount our local ./src folder into Apache's web root.
+      # Editing a file on the host instantly updates the running site
+      # (no rebuild needed), which keeps the feedback loop fast.
+      - ./src:/var/www/html
+
+    restart: unless-stopped
