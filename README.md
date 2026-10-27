@@ -193,7 +193,32 @@ host name. Nothing runs.
 
 ---
 
-## 6. Conclusion
+## 6. Key Takeaways
+
+- **Untrusted input.** Anything a user sends (forms, URLs) can be an attack,
+  so it must never be trusted. Here, the host box was the entry point for
+  every attack.
+- **Code vs data.** Injection happens when data (user text) gets mixed into
+  code (a command), so the data gets run. `"getent hosts " . $host` mixed the
+  two together.
+- **Avoid the shell.** Run programs directly with a list of arguments, so
+  special characters have no meaning, like `proc_open(['getent', 'hosts', $host])`.
+- **Whitelist validation.** Allow only input known to be good and reject the
+  rest. It "fails closed": anything unexpected is blocked. Here, only IPs or
+  host names with letters, numbers, dots and hyphens are accepted.
+- **Blacklist is weak.** Blocking known bad characters "fails open": one
+  missed character breaks it. That is why a whitelist was chosen.
+- **Defence in depth.** Use several layers of protection, so if one fails the
+  next still stops the attack. Here: no shell **and** whitelist validation.
+- **Least privilege.** Give a program only the rights it needs, so a
+  successful attack does less damage. The server runs as `www-data`, not `root`.
+- **Output encoding is not enough.** `htmlspecialchars()` makes output safe to
+  show on a page (stops XSS), but it does not stop command injection, because
+  the command already ran before the output was encoded.
+
+---
+
+## 7. Conclusion
 
 The vulnerable page joined user input into a shell command, so a normal text
 box could run `id`, `whoami` and `cat /etc/passwd` on the server. The secure
