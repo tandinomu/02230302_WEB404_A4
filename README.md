@@ -343,3 +343,11 @@ than a blacklist.
 - [ ] `screenshots/06_secure_rejects_separator.png`, secure rejects `; id`
 - [ ] `screenshots/07_secure_rejects_catpasswd.png`, secure rejects `cat /etc/passwd`
 - [ ] `screenshots/08_secure_rejects_substitution.png`, secure rejects `$(whoami)` (optional)
+
+---
+
+## References
+
+- OWASP Top 10:2021, A03 Injection, https://owasp.org/Top10/A03_2021-Injection/
+- CWE-78: Improper Neutralization of Special Elements used in an OS Command, https://cwe.mitre.org/data/definitions/78.html
+- OWASP OS Command Injection Defense Cheat Sheet, https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
