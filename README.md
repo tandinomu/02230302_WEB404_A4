@@ -6,38 +6,55 @@
 
 ---
 
-## 1. What is Command Injection?
+## 1. Key Ideas
 
-Command injection happens when a web app puts user input into a system command
-and runs it through a shell. The shell treats characters like `;`, `&&`, `||`,
-`|` and `$(...)` as instructions, so an attacker can add their own commands.
+**What the tool does.** It is a web page with one text box. You type a host
+name or IP address (for example `127.0.0.1`), and the server tells you what
+that address is called. To do this, the server runs a real Linux command:
+`getent hosts <what you typed>`.
 
-This is listed in **OWASP Top 10 2021, A03 Injection** and as **CWE-78**.
-It is dangerous because the attacker can read files, change data, or take over
-the server.
+**What a shell is.** A shell (`/bin/sh`) is the program that reads a line of
+text and runs it as commands, like the terminal. It gives some characters a
+special meaning:
+
+| Character | Meaning to the shell                          |
+|-----------|-----------------------------------------------|
+| `;`       | run the next command after this one           |
+| `&&`      | run the next command if this one worked       |
+| `\|\|`    | run the next command if this one failed       |
+| `\|`      | send this output into the next command        |
+| `$(...)`  | run the command inside first, use its output  |
+
+**What command injection is.** If a web app puts what the user typed into a
+command and gives it to the shell, the user can type these special characters
+and add their **own** commands. The server then runs them. This is
+**OWASP Top 10 2021, A03 Injection** and **CWE-78**.
+
+**Why it is dangerous.** The attacker's commands run on the server with the
+same rights as the web server. They can read private files, delete data, or
+take over the machine.
 
 ---
 
 ## 2. Lab Setup
 
-- One Docker container running PHP 8.3 and Apache.
-- The tool does a host lookup with `getent hosts <host>`.
-- The port is bound to `127.0.0.1:8088` only, so the lab is not reachable from
-  the network. All tests use `127.0.0.1` / `localhost`.
+- **Docker** runs the whole lab in one isolated container (PHP 8.3 + Apache web server).
+- The site is only open on `127.0.0.1:8088`, which means **this computer only**.
+  Nobody on the network can reach the vulnerable page, and all tests target
+  `127.0.0.1` / `localhost`, so no real system is attacked.
 
 ```bash
 docker compose up -d     # start the lab, then open http://127.0.0.1:8088/
 docker compose down      # stop the lab
 ```
 
-Files:
-```
-docker-compose.yml   # container setup
-src/index.php        # landing page
-src/vulnerable.php   # insecure version
-src/secure.php       # fixed version
-screenshots/         # evidence
-```
+| File                  | Purpose                      |
+|-----------------------|------------------------------|
+| `docker-compose.yml`  | container setup              |
+| `src/index.php`       | landing page                 |
+| `src/vulnerable.php`  | insecure version             |
+| `src/secure.php`      | fixed version                |
+| `screenshots/`        | evidence for each step       |
 
 ### Step 1: Open the lab
 
@@ -50,16 +67,15 @@ the secure version of the lookup tool.
 
 ## 3. The Vulnerable Version
 
-The user input is joined into a string and run by the shell:
-
 ```php
-$host = $_GET['host'];
-$cmd = "getent hosts " . $host;
-$output = shell_exec($cmd . " 2>&1");
+$host = $_GET['host'];               // whatever the user typed, unchecked
+$cmd = "getent hosts " . $host;      // glued onto the command as text
+$output = shell_exec($cmd . " 2>&1"); // the whole text is given to the shell
 ```
 
-`shell_exec()` sends the whole string to `/bin/sh`, so anything in `$host` can
-run as a command.
+**The problem:** the user's text becomes part of the command. If the user
+types `127.0.0.1; id`, the shell receives `getent hosts 127.0.0.1; id` and sees
+**two** commands, so it runs both.
 
 ### Step 2: Normal use of the vulnerable page
 
@@ -68,72 +84,73 @@ run as a command.
 Input `127.0.0.1` runs `getent hosts 127.0.0.1` and returns
 `127.0.0.1  localhost`. The tool works as intended.
 
-### Attacks
-
-| # | Input                                      | Result                          | Why it works                          |
-|---|--------------------------------------------|---------------------------------|---------------------------------------|
-| 1 | `127.0.0.1; id`                            | `uid=33(www-data) ...`          | `;` runs the next command             |
-| 2 | `127.0.0.1 && whoami`                      | `www-data`                      | `&&` runs if the first one succeeds   |
-| 3 | `doesnotexist \|\| id`                     | `uid=33(www-data) ...`          | `\|\|` runs if the first one fails    |
-| 4 | `127.0.0.1 \| id`                          | `uid=33(www-data) ...`          | `\|` pipes into a second command      |
-| 5 | `127.0.0.1; echo "ran as: $(whoami)"`      | `ran as: www-data`              | `$(...)` runs the inner command       |
-| 6 | `127.0.0.1; cat /etc/passwd`               | Whole `/etc/passwd` file shown  | `;` chains a file read                |
-
 ### Step 3: Attack with a command separator
 
 ![Separator attack shows www-data](screenshots/02_attack_separator_id.png)
 
-Input `127.0.0.1; id`. The `;` makes the shell run `id` after the lookup. The
-output shows `uid=33(www-data)`, proving an extra command ran on the server.
+Input `127.0.0.1; id`. The `;` makes the shell run `id` after the lookup. `id`
+prints who the server is running as: `uid=33(www-data)`. `www-data` is the
+user account of the web server. This proves an extra command ran on the server.
 
 ### Step 4: Read a sensitive file
 
 ![/etc/passwd dumped](screenshots/03_attack_cat_passwd.png)
 
-Input `127.0.0.1; cat /etc/passwd`. The page prints the whole `/etc/passwd`
-file, which shows the attacker can read files from the server.
+Input `127.0.0.1; cat /etc/passwd`. `cat` prints a file, and `/etc/passwd` is
+the list of every user account on the server. The page shows the whole file,
+so the attacker can read files from the server.
 
 ### Step 5: Attack with command substitution
 
 ![Command substitution](screenshots/04_attack_substitution.png)
 
 Input `127.0.0.1; echo "substitution ran as: $(whoami)"`. The shell runs
-`whoami` inside `$(...)` first and prints `substitution ran as: www-data`.
+`whoami` inside `$(...)` first and puts the answer into the sentence, printing
+`substitution ran as: www-data`.
 
-These steps prove that anyone can run any command on the server as the
-`www-data` user.
+The other characters work the same way: `127.0.0.1 && whoami`,
+`doesnotexist || id` and `127.0.0.1 | id` all ran the extra command.
 
 ---
 
 ## 4. The Secure Version
 
-Two fixes are used together.
+Two separate fixes are used, so if one fails the other still protects the page.
 
-**Fix 1: No shell.** The command is passed as an array to `proc_open()`, so PHP
-runs `getent` directly. The input is treated as one plain argument, and
-characters like `;` mean nothing.
+### Fix 1: Do not use the shell
 
 ```php
 $proc = proc_open(['getent', 'hosts', $host], $descriptors, $pipes);
 ```
 
-**Fix 2: Whitelist validation.** Only a valid IPv4 address or hostname
-(letters, digits, dots, hyphens) is accepted. Anything else is rejected and
-nothing runs.
+The command is given as a **list** instead of one line of text. PHP starts
+`getent` directly, with no shell in between. Nobody reads `;` or `$(...)` as
+special, so `127.0.0.1; id` is treated as one strange host name that does not
+exist. This alone stops the attack.
+
+### Fix 2: Only accept valid input (whitelist)
 
 ```php
 function is_valid_host(string $host): bool {
     if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-        return true;
+        return true;   // a real IP address like 127.0.0.1
     }
     $pattern = '/^(?=.{1,253}$)[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?'
              . '(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/';
-    return (bool) preg_match($pattern, $host);
+    return (bool) preg_match($pattern, $host);   // a real host name
 }
 ```
 
-**Least privilege:** the process runs as `www-data`, not root, which limits the
-damage if something else goes wrong.
+Before anything runs, the input must be a real IP address or a real host name
+(only letters, numbers, dots and hyphens). Spaces, `;`, `|`, `&`, `$` and
+brackets are not allowed, so every attack is rejected and nothing runs.
+
+**Whitelist vs blacklist:** a blacklist tries to block every bad character, and
+missing even one breaks it. A whitelist only lets through what is known to be
+good and blocks everything else, so it is much safer.
+
+**Least privilege:** the web server runs as `www-data`, not as `root` (the
+admin account), so even a successful attack could do less damage.
 
 ### Step 6: Normal use of the secure page
 
@@ -161,31 +178,28 @@ is no longer shown.
 ![Secure rejects $(whoami)](screenshots/08_secure_rejects_substitution.png)
 
 The `$(whoami)` input is rejected because `$`, `(` and `)` are not valid in a
-hostname. Nothing runs.
+host name. Nothing runs.
 
 ---
 
 ## 5. Comparison
 
-| Aspect            | Vulnerable                           | Secure                                   |
-|-------------------|--------------------------------------|------------------------------------------|
+| Aspect            | Vulnerable                            | Secure                                  |
+|-------------------|---------------------------------------|-----------------------------------------|
 | How it runs       | `shell_exec("getent hosts " . $host)` | `proc_open(['getent','hosts',$host])`   |
-| Uses a shell?     | Yes                                  | No                                       |
-| Input checked?    | No                                   | Yes, whitelist                           |
-| `127.0.0.1; id`   | Runs `id`                            | Rejected                                 |
-
-**Why a whitelist and not a blacklist?** A blacklist tries to block every bad
-character, and it is easy to miss one. A whitelist only allows what is valid
-and blocks everything else by default, so it is much safer.
+| Uses a shell?     | Yes                                   | No                                      |
+| Input checked?    | No                                    | Yes, whitelist                          |
+| `127.0.0.1; id`   | Runs `id`                             | Rejected, nothing runs                  |
 
 ---
 
 ## 6. Conclusion
 
-The vulnerable page let a normal form field run `id`, `whoami` and
-`cat /etc/passwd` on the server. The secure page fixed this by running the
-program without a shell and only accepting valid hostnames or IPs. The main
-lesson: **never build shell commands from user input.**
+The vulnerable page joined user input into a shell command, so a normal text
+box could run `id`, `whoami` and `cat /etc/passwd` on the server. The secure
+page fixed this in two ways: it runs the program without a shell, and it only
+accepts valid IP addresses or host names. The main lesson: **never build shell
+commands from user input.**
 
 ---
 
