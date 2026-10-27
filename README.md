@@ -1,26 +1,26 @@
-# WEB404 Secure Coding Practices — Practical Assignment 4
+# WEB404 Secure Coding Practices: Practical Assignment 4
 ## Building a Command-Line Web Tool and Defending Against OS Command Injection
 
 **Student ID:** 02230302
-**Module:** WEB404 — Secure Coding Practices
+**Module:** WEB404, Secure Coding Practices
 **Task:** Create a command-line interface in a web application and implement
 safeguards against command injection.
 
 ---
 
-## Overview — what this assignment does and how
+## Overview: what this assignment does and how
 
 This assignment builds a small command-line web tool (a DNS/host lookup) and
 then defends it against **OS command injection**.
 
 The approach has three stages:
 
-1. **Build a vulnerable version** — a page that runs a system command built by
+1. **Build a vulnerable version**: a page that runs a system command built by
    concatenating raw user input and passing it to a shell (`shell_exec`).
-2. **Attack it** — use shell metacharacters (`;`, `&&`, `||`, `|`, `$(...)`) in
+2. **Attack it**: use shell metacharacters (`;`, `&&`, `||`, `|`, `$(...)`) in
    an ordinary form field to run extra commands on the server (`id`, `whoami`,
    `cat /etc/passwd`).
-3. **Secure it** — rebuild the tool with two layered defences: run the binary
+3. **Secure it**: rebuild the tool with two layered defences: run the binary
    directly with an argument array (no shell at all) and validate input against a
    strict whitelist, then show every attack failing.
 
@@ -51,7 +51,7 @@ Command injection often leads to **full server compromise**, which is why it is
 treated as a critical-severity issue.
 
 ### OWASP reference
-This vulnerability belongs to **OWASP Top 10 2021 — A03:2021 Injection**
+This vulnerability belongs to **OWASP Top 10 2021, A03:2021 Injection**
 (<https://owasp.org/Top10/A03_2021-Injection/>). Injection covers any flaw
 where untrusted data is sent to an interpreter (SQL, OS shell, LDAP, etc.) as
 part of a command or query. The matching weakness is **CWE-78: Improper
@@ -101,7 +101,7 @@ Files:
 └── README.md            # this report
 ```
 
-[SCREENSHOT: landing page at http://127.0.0.1:8088/ — screenshots/00_landing.png]
+[SCREENSHOT: landing page at http://127.0.0.1:8088/, screenshots/00_landing.png]
 
 ---
 
@@ -112,7 +112,7 @@ The flaw is that raw user input is concatenated into a command **string** and
 run through a shell with `shell_exec()`:
 
 ```php
-// Take the user input EXACTLY as typed — no checks, no escaping.
+// Take the user input EXACTLY as typed, no checks, no escaping.
 $host = $_GET['host'];
 
 // Build the command by concatenating the raw input into a string.
@@ -139,14 +139,14 @@ Input `127.0.0.1` runs `getent hosts 127.0.0.1` and returns:
 ```
 127.0.0.1       localhost
 ```
-[SCREENSHOT: vulnerable page, normal lookup — screenshots/01_vulnerable_normal.png]
+[SCREENSHOT: vulnerable page, normal lookup, screenshots/01_vulnerable_normal.png]
 
 ### The attacks
 
 For each attack: the **input** typed into the host field, the **output**
 observed, and **why** the shell obeyed.
 
-#### Attack 1 — Command separator `;`
+#### Attack 1: Command separator `;`
 - **Input:** `127.0.0.1; id`
 - **Command run:** `getent hosts 127.0.0.1; id`
 - **Output:**
@@ -157,27 +157,27 @@ observed, and **why** the shell obeyed.
 - **Why:** `;` means "then run the next command", unconditionally. The shell
   sees two commands and runs both.
 
-[SCREENSHOT: separator attack showing uid=33(www-data) — screenshots/02_attack_separator_id.png]
+[SCREENSHOT: separator attack showing uid=33(www-data), screenshots/02_attack_separator_id.png]
 
-#### Attack 2 — Logical AND `&&`
+#### Attack 2: Logical AND `&&`
 - **Input:** `127.0.0.1 && whoami`
 - **Output:** `127.0.0.1  localhost` then `www-data`
 - **Why:** `&&` runs the second command only if the first **succeeds** (exit
   code 0). The lookup succeeded, so `whoami` ran.
 
-#### Attack 3 — Logical OR `||`
+#### Attack 3: Logical OR `||`
 - **Input:** `doesnotexist || id`
 - **Output:** `uid=33(www-data) gid=33(www-data) groups=33(www-data)`
 - **Why:** `||` runs the second command only if the first **fails**. The lookup
   of a bogus host failed, so `id` ran.
 
-#### Attack 4 — Pipe `|`
+#### Attack 4: Pipe `|`
 - **Input:** `127.0.0.1 | id`
 - **Output:** `uid=33(www-data) gid=33(www-data) groups=33(www-data)`
 - **Why:** `|` sends the first command's output into the second command. `id`
   ignores that input and runs anyway, printing the server's identity.
 
-#### Attack 5 — Command substitution `$(...)`
+#### Attack 5: Command substitution `$(...)`
 - **Input:** `127.0.0.1; echo "substitution ran as: $(whoami)"`
 - **Output:** `substitution ran as: www-data`
 - **Why:** `$(...)` tells the shell to run the inner command **first** and paste
@@ -185,9 +185,9 @@ observed, and **why** the shell obeyed.
   execute. (Backticks `` `...` `` are the older form and behave the same, e.g.
   input `` 127.0.0.1; echo result=`id -un` `` returns `result=www-data`.)
 
-[SCREENSHOT: command substitution proof — screenshots/04_attack_substitution.png]
+[SCREENSHOT: command substitution proof, screenshots/04_attack_substitution.png]
 
-#### Attack 6 — Reading a sensitive file
+#### Attack 6: Reading a sensitive file
 - **Input:** `127.0.0.1; cat /etc/passwd`
 - **Output:** the entire `/etc/passwd` file, including:
   ```
@@ -199,11 +199,11 @@ observed, and **why** the shell obeyed.
 - **Why:** `;` chains a second command that reads a sensitive file the web user
   is allowed to read. This is real information disclosure.
 
-[SCREENSHOT: /etc/passwd dumped through the form — screenshots/03_attack_cat_passwd.png]
+[SCREENSHOT: /etc/passwd dumped through the form, screenshots/03_attack_cat_passwd.png]
 
 ### What the attacks prove
 - **Arbitrary command execution** on the server through a normal form field.
-- **The process runs as `www-data`** (uid 33), the Apache worker user — shown by
+- **The process runs as `www-data`** (uid 33), the Apache worker user, shown by
   `id` / `whoami` in every attack. Not root here, but `www-data` can still read
   source, config and `/etc/passwd`, and could attempt privilege escalation.
 
@@ -213,10 +213,10 @@ observed, and **why** the shell obeyed.
 
 The fix uses **two independent safeguards**, strongest first.
 
-### Safeguard 1 (strongest) — Avoid the shell entirely
+### Safeguard 1 (strongest): Avoid the shell entirely
 Instead of building a string for `/bin/sh`, pass the program and its arguments
 as a **list** to `proc_open()`. PHP then launches the binary **directly**, with
-no shell in between, so shell metacharacters are never interpreted — the whole
+no shell in between, so shell metacharacters are never interpreted, the whole
 user input is delivered to `getent` as **one literal hostname argument**.
 
 ```php
@@ -226,11 +226,11 @@ $proc = proc_open(['getent', 'hosts', $host], $descriptors, $pipes);
 
 **Proof it works on its own:** feeding the attack string `127.0.0.1; id`
 straight into this array form (bypassing validation) produces **no output and
-no `id` result** — `getent` just fails to resolve the literal string
+no `id` result**, `getent` just fails to resolve the literal string
 `127.0.0.1; id` as a hostname. There is no shell, so there is nothing to inject
 into.
 
-### Safeguard 2 — Strict whitelist validation
+### Safeguard 2: Strict whitelist validation
 Before running anything, the input must match **exactly** a valid IPv4 address
 **or** a valid hostname. Anything else is rejected and nothing runs.
 
@@ -247,7 +247,7 @@ function is_valid_host(string $host): bool {
 }
 ```
 
-A valid hostname/IP contains only letters, digits, dots and hyphens — **none**
+A valid hostname/IP contains only letters, digits, dots and hyphens, **none**
 of the shell metacharacters. So any injection attempt fails validation
 immediately.
 
@@ -256,14 +256,14 @@ The lookup process runs as the unprivileged **`www-data`** user, not root, so
 even a successful attack would be limited. In production you would go further:
 run the container as a dedicated non-root user, drop Linux capabilities, mount
 the filesystem read-only, and give the process only the access it truly needs.
-Least privilege does not *prevent* injection — it **reduces the blast radius**
+Least privilege does not *prevent* injection; it **reduces the blast radius**
 if another control fails.
 
 ### Legitimate use still works
 - Input `127.0.0.1` → `127.0.0.1  localhost`
 - Input `localhost` → `::1  localhost ip6-localhost ip6-loopback`
 
-[SCREENSHOT: secure page, normal lookup works — screenshots/05_secure_normal.png]
+[SCREENSHOT: secure page, normal lookup works, screenshots/05_secure_normal.png]
 
 ### The same attacks, now failing
 
@@ -272,26 +272,26 @@ before any command runs:
 
 | Input (host field)              | Result on secure page                 |
 |---------------------------------|---------------------------------------|
-| `127.0.0.1; id`                 | Rejected — "Nothing was run."         |
-| `127.0.0.1 && whoami`           | Rejected — "Nothing was run."         |
-| `doesnotexist \|\| id`          | Rejected — "Nothing was run."         |
-| `127.0.0.1 \| id`               | Rejected — "Nothing was run."         |
-| `$(id)`                         | Rejected — "Nothing was run."         |
-| `` `whoami` ``                  | Rejected — "Nothing was run."         |
-| `127.0.0.1; cat /etc/passwd`    | Rejected — "Nothing was run."         |
+| `127.0.0.1; id`                 | Rejected: "Nothing was run."         |
+| `127.0.0.1 && whoami`           | Rejected: "Nothing was run."         |
+| `doesnotexist \|\| id`          | Rejected: "Nothing was run."         |
+| `127.0.0.1 \| id`               | Rejected: "Nothing was run."         |
+| `$(id)`                         | Rejected: "Nothing was run."         |
+| `` `whoami` ``                  | Rejected: "Nothing was run."         |
+| `127.0.0.1; cat /etc/passwd`    | Rejected: "Nothing was run."         |
 
-[SCREENSHOT: secure page rejects the separator attack — screenshots/06_secure_rejects_separator.png]
+[SCREENSHOT: secure page rejects the separator attack, screenshots/06_secure_rejects_separator.png]
 
-[SCREENSHOT: secure page rejects cat /etc/passwd (compare to screenshot 03) — screenshots/07_secure_rejects_catpasswd.png]
+[SCREENSHOT: secure page rejects cat /etc/passwd (compare to screenshot 03), screenshots/07_secure_rejects_catpasswd.png]
 
 ---
 
-## 5. Vulnerable vs Secure — Comparison
+## 5. Vulnerable vs Secure: Comparison
 
 | Aspect                | Vulnerable (`vulnerable.php`)          | Secure (`secure.php`)                         |
 |-----------------------|----------------------------------------|-----------------------------------------------|
 | How the command runs  | `shell_exec("getent hosts " . $host)`  | `proc_open(['getent','hosts',$host], ...)`    |
-| Shell involved?       | Yes — `/bin/sh` parses the string      | No — the binary is run directly               |
+| Shell involved?       | Yes: `/bin/sh` parses the string      | No: the binary is run directly               |
 | Input handling        | Raw, concatenated, trusted             | Validated against a strict whitelist          |
 | `;`, `&&`, `$()` etc. | Interpreted as shell instructions      | Literal characters / rejected before running  |
 | `127.0.0.1; id`       | Runs `id` as www-data                  | Rejected, nothing runs                        |
@@ -300,7 +300,7 @@ before any command runs:
 ### Why whitelisting beats blacklisting
 A **blacklist** tries to list every "bad" thing to block (e.g. strip `;`, `&`,
 `|`). This is weak because:
-- It is **easy to miss** a dangerous character or combination — you must think
+- It is **easy to miss** a dangerous character or combination, you must think
   of *every* one (`;`, `&&`, `||`, `|`, `` ` ``, `$()`, `\n`, `>`, `<`, `&`,
   spaces, `$IFS`, …). Miss one and the defence fails.
 - Attackers find **encodings and bypasses** (newlines, Unicode look-alikes,
@@ -308,8 +308,8 @@ A **blacklist** tries to list every "bad" thing to block (e.g. strip `;`, `&`,
 - It fails **open**: anything not explicitly banned is allowed through.
 
 A **whitelist** defines what is **valid** and rejects everything else. For a
-hostname that is simply "letters, digits, dots and hyphens". It fails **closed**
-— unexpected input is denied by default — so you don't have to predict every
+hostname that is simply "letters, digits, dots and hyphens". It fails **closed**:
+unexpected input is denied by default, so you don't have to predict every
 attack. That is why whitelisting is the recommended approach.
 
 > Best of all, in this lab the primary fix doesn't rely on filtering characters
@@ -334,12 +334,12 @@ than a blacklist.
 
 ## 7. Screenshot Checklist
 
-- [ ] `screenshots/00_landing.png` — landing page (optional)
-- [ ] `screenshots/01_vulnerable_normal.png` — vulnerable page, normal lookup
-- [ ] `screenshots/02_attack_separator_id.png` — `127.0.0.1; id` shows www-data
-- [ ] `screenshots/03_attack_cat_passwd.png` — `/etc/passwd` dumped via the form
-- [ ] `screenshots/04_attack_substitution.png` — `$(whoami)` substitution (optional)
-- [ ] `screenshots/05_secure_normal.png` — secure page, normal lookup works
-- [ ] `screenshots/06_secure_rejects_separator.png` — secure rejects `; id`
-- [ ] `screenshots/07_secure_rejects_catpasswd.png` — secure rejects `cat /etc/passwd`
-- [ ] `screenshots/08_secure_rejects_substitution.png` — secure rejects `$(whoami)` (optional)
+- [ ] `screenshots/00_landing.png`, landing page (optional)
+- [ ] `screenshots/01_vulnerable_normal.png`, vulnerable page, normal lookup
+- [ ] `screenshots/02_attack_separator_id.png`, `127.0.0.1; id` shows www-data
+- [ ] `screenshots/03_attack_cat_passwd.png`, `/etc/passwd` dumped via the form
+- [ ] `screenshots/04_attack_substitution.png`, `$(whoami)` substitution (optional)
+- [ ] `screenshots/05_secure_normal.png`, secure page, normal lookup works
+- [ ] `screenshots/06_secure_rejects_separator.png`, secure rejects `; id`
+- [ ] `screenshots/07_secure_rejects_catpasswd.png`, secure rejects `cat /etc/passwd`
+- [ ] `screenshots/08_secure_rejects_substitution.png`, secure rejects `$(whoami)` (optional)
