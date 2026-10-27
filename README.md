@@ -8,6 +8,26 @@ safeguards against command injection.
 
 ---
 
+## Overview — what this assignment does and how
+
+This assignment builds a small command-line web tool (a DNS/host lookup) and
+then defends it against **OS command injection**.
+
+The approach has three stages:
+
+1. **Build a vulnerable version** — a page that runs a system command built by
+   concatenating raw user input and passing it to a shell (`shell_exec`).
+2. **Attack it** — use shell metacharacters (`;`, `&&`, `||`, `|`, `$(...)`) in
+   an ordinary form field to run extra commands on the server (`id`, `whoami`,
+   `cat /etc/passwd`).
+3. **Secure it** — rebuild the tool with two layered defences: run the binary
+   directly with an argument array (no shell at all) and validate input against a
+   strict whitelist, then show every attack failing.
+
+The core idea: **never build a shell command string from user input.**
+
+---
+
 ## 1. Introduction
 
 ### What is OS command injection?
